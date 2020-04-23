@@ -1,44 +1,20 @@
 const router = require('express').Router();
-const User = require('../models/users');
-const bcrypt = require('bcryptjs');
+const passport = require('passport');
+const jwt = require('jsonwebtoken');
+const UserService = require('../services/users');
+const userService = new UserService();
+const ApiKeyService = require('../services/apiKey');
+const apiKeyService = new ApiKeyService();
+const {config} = require('../config/index');
+
+
+// BASIC STRATEGY
+require('../utils/auth/strategies/basic');
 
 router.route('/').get(async (req, res, next) => {
   try {
-    const users = await User.find();
+    const users = await userService.getAll();
     res.status(200).json(users);
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.route('/sing-up').post(async function (req, res, next) {
-  try {
-    const passwordHashed = await bcrypt.hash(req.body.password, 10);
-    const {
-      email,
-      firstName,
-      lastName,
-      role,
-      gender,
-      age,
-      address,
-      phone,
-      ipAddress,
-    } = req.body;
-    const newUser = new User({
-      email,
-      password: passwordHashed,
-      firstName,
-      lastName,
-      role,
-      gender,
-      age: new Date(age),
-      address,
-      phone,
-      ipAddress,
-    });
-    await newUser.save();
-    res.status(200).json('User added');
   } catch (err) {
     next(err);
   }
@@ -46,8 +22,51 @@ router.route('/sing-up').post(async function (req, res, next) {
 
 router.route('/:id').get(async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await userService.getOne(req.params.id);
     res.status(200).json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.route('/sing-in').post(async (req, res, next) => {
+  const { apiKeyToken } = req.body;
+  if (!apiKeyToken) {
+    next(new Error('unauthorized'));
+  }
+  passport.authenticate('basic', async (err, user) => {
+    try {
+      if (err || !user) {
+        next(err);
+      }
+      req.login(user, {session: false}, async (err) =>{
+        if(err){
+          next(err)
+        }
+        const apiKey = await apiKeyService.getApiKey({token: apiKeyToken});
+        if(!apiKey){
+          next(new Error('unauthorized'));
+        }
+        const {_id: id, name, email} = user;
+        const payload = {
+          sub: id,
+          email,
+          scopes: apiKey.scopes
+        }
+        // console.log(config);
+        const token = jwt.sign(payload, config.authJwtSecret,{expiresIn: '15m'});
+        return res.status(200).json({token, user: {id, name, email}});
+      });
+    } catch (err) {
+      next(err);
+    }
+  })(req, res, next);
+});
+
+router.route('/sing-up').post(async function (req, res, next) {
+  try {
+    await userService.createOne(req.body);
+    res.status(200).json('User added');
   } catch (err) {
     next(err);
   }
@@ -55,32 +74,17 @@ router.route('/:id').get(async (req, res, next) => {
 
 router.route('/update/:id').put(async (req, res, next) => {
   try {
-    const passwordHashed = bcrypt.hash(req.body.password, 10);
-    const user = await User.findById(req.params.id);
-
-    user.email = req.body.email;
-    user.password = passwordHashed;
-    user.firstName = req.body.firstName;
-    user.lastName = req.body.lastName;
-    user.role = req.body.role;
-    user.gender = req.body.gender;
-    user.age = req.body.age;
-    user.address = req.body.address;
-    user.phone = req.body.phone;
-    user.ipAddress = req.body.ipAddress;
-
+    await userService.updateOne(req.params.id, req.body);
     res.status(200).json('User Updated');
   } catch (err) {
     next(err);
   }
 });
 
-router.route('/:id').delete(async (req, res, next) => {
+router.route('/delete/:id').delete(async (req, res, next) => {
   try {
-    const userDeleted = await User.findByIdAndDelete(req.params.id);
-    if (userDeleted) {
-      res.status(200).json('User deleted');
-    }
+    await userService.deleteOne(req.params.id);
+    res.status(200).json('User deleted');
   } catch (err) {
     next(err);
   }
