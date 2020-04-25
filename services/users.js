@@ -41,6 +41,7 @@ class UserService{
       ipAddress,
     });
     await newUser.save();
+    return newUser.id;
   }
   async updateOne(id, data){
     const passwordHashed = await bcrypt.hash(data.password, 10);

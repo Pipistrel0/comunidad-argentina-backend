@@ -4,7 +4,7 @@ const Schema = mongoose.Schema;
 const apiKeySchema = new Schema(
   {
     token: { type: String },
-    scopes:{type: String}
+    scopes:[{type: String}]
   },
   {
     timestamps: true,
