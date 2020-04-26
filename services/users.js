@@ -15,6 +15,14 @@ class UserService{
     const user = await User.findOne({email: email});
     return user;
   }
+  async findOrCreateOne(googleId, email){
+    const user = await User.findOne({$or:[{email: email}, {googleId: googleId}]});
+    if(user){
+      return user;
+    }
+    await this.createOne(email)
+    return await this.getOneByEmail(email);
+  }
   async createOne(data){
     const passwordHashed = await bcrypt.hash(data.password, 10);
     const {

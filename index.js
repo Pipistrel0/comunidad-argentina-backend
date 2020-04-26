@@ -27,6 +27,7 @@ connection.once('open', function(){
 connection.on('error', function(){
   console.error("Something went wrong with the connection of the db");
 })
+
 // middlewares
 app.use(express.json());
 app.use(cors());

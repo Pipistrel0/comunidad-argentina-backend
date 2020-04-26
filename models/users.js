@@ -32,13 +32,13 @@ const userSchema = new Schema({
   },
   gender: {
     type: String,
-    required: true,
+    // required: true,
     enum: ["Hombre", "Mujer", "Otro"],
     trim: true
   },
   age: {
     type: Date,
-    required: true,
+    // required: true,
   },
   address: {
     type: String,
@@ -47,11 +47,11 @@ const userSchema = new Schema({
   },
   phone: {
     type: Number,
-    required: true,
+    // required: true,
   },
   ipAddress: {
     type: String,
-    required: true,
+    // required: true,
     maxlength: 15
   }
 },
@@ -60,7 +60,7 @@ const userSchema = new Schema({
   }
 );
 
-const User = mongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema, 'users');
 
 module.exports = User;
 

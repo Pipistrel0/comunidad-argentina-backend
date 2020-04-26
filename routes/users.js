@@ -14,6 +14,8 @@ const scopesValidationHandler = require('../utils/middleware/scopesValidationHan
 require('../utils/auth/strategies/basic');
 // JWT STRATEGY
 require('../utils/auth/strategies/jwt');
+// GOOGLE OAUTH STRATEGY
+require('../utils/auth/strategies/google');
 
 router.get(
   '/',
@@ -43,65 +45,87 @@ router.get(
   }
 );
 
-router.post(
-  '/sing-in',
-  async (req, res, next) => {
-    const { apiKeyToken } = req.body;
-    if (!apiKeyToken) {
-      next(boom.unauthorized());
-    }
-    passport.authenticate('basic', async (err, user) => {
-      try {
-        if (err || !user) {
-          next(err);
-        }
-        req.login(user, { session: false }, async (err) => {
-          if (err) {
-            next(err);
-          }
-          const apiKey = await apiKeyService.getApiKey({ token: apiKeyToken });
-          if (!apiKey) {
-            next(boom.unauthorized());
-          }
-          const { _id: id, name, email } = user;
-          const payload = {
-            sub: id,
-            email,
-            scopes: apiKey.scopes,
-          };
-          const token = jwt.sign(payload, config.authJwtSecret, {
-            expiresIn: '15m',
-          });
-          return res.status(200).json({ token, user: { id, name, email } });
-        });
-      } catch (err) {
-        next(err);
-      }
-    })(req, res, next);
-  }
+router.get(
+  '/auth/google-oauth',
+  passport.authenticate('google', {
+    scope: ['profile', 'email', 'openid'],
+  })
 );
 
-router.post(
-  '/sing-up',
-  async function (req, res, next) {
-    try {
-      const { email } = req.body;
-      const userExist = await userService.getOneByEmail(email);
-      if (userExist) {
-        return res.json({
-          message: 'user already exists',
-        });
+router.get(
+  '/auth/google-oauth/callback',
+  passport.authenticate(
+    'google',
+    { session: false },
+    async (req, res, next) => {
+      if (!req.user) {
+        next(boom.unauthorized());
       }
-      const userCreatedId = await userService.createOne(req.body);
-      res.status(200).json({
-        message: 'user created',
-        data: userCreatedId,
+      const { token, ...user } = req.user;
+
+      res.cookie('token', token, {
+        httpOnly: !config.dev,
+        secure: !config.dev,
+      });
+
+      res.status(200).json(user);
+    }
+  )
+);
+
+router.post('/sing-in', async (req, res, next) => {
+  const { apiKeyToken } = req.body;
+  if (!apiKeyToken) {
+    next(boom.unauthorized());
+  }
+  passport.authenticate('basic', async (err, user) => {
+    try {
+      if (err || !user) {
+        next(err);
+      }
+      req.login(user, { session: false }, async (err) => {
+        if (err) {
+          next(err);
+        }
+        const apiKey = await apiKeyService.getApiKey({ token: apiKeyToken });
+        if (!apiKey) {
+          next(boom.unauthorized());
+        }
+        const { _id: id, name, email } = user;
+        const payload = {
+          sub: id,
+          email,
+          scopes: apiKey.scopes,
+        };
+        const token = jwt.sign(payload, config.authJwtSecret, {
+          expiresIn: '15m',
+        });
+        return res.status(200).json({ token, user: { id, name, email } });
       });
     } catch (err) {
       next(err);
     }
+  })(req, res, next);
+});
+
+router.post('/sing-up', async function (req, res, next) {
+  try {
+    const { email } = req.body;
+    const userExist = await userService.getOneByEmail(email);
+    if (userExist) {
+      return res.json({
+        message: 'user already exists',
+      });
+    }
+    const userCreatedId = await userService.createOne(req.body);
+    res.status(200).json({
+      message: 'user created',
+      data: userCreatedId,
+    });
+  } catch (err) {
+    next(err);
   }
-);
+});
 
 router.put(
   '/update/:id',
