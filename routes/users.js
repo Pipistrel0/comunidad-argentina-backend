@@ -54,23 +54,43 @@ router.get(
 
 router.get(
   '/auth/google-oauth/callback',
-  passport.authenticate(
-    'google',
-    { session: false },
-    async (req, res, next) => {
-      if (!req.user) {
+  passport.authenticate('google', { session: false }),
+  async (req, res, next) => {
+    if (!req.user) {
+      next(boom.unauthorized());
+    }
+    try {
+      const apiKey = await apiKeyService.getApiKey({token: req.token});
+      if (!apiKey) {
         next(boom.unauthorized());
       }
-      const { token, ...user } = req.user;
+
+      const { _id: id, firstName, lastName, email } = req.user;
+
+      const payload = {
+        sub: id,
+        firstName,
+        lastName,
+        email,
+        scopes: apiKey.scopes,
+      };
+      const token = jwt.sign(payload, config.authJwtSecret, {
+        expiresIn: '15m',
+      });
 
       res.cookie('token', token, {
         httpOnly: !config.dev,
         secure: !config.dev,
       });
 
-      res.status(200).json(user);
+      return res.status(200).json({
+        message: 'user created',
+        data: req.user,
+      });
+    } catch (err) {
+      next(err);
     }
-  )
+  }
 );
 
 router.post('/sing-in', async (req, res, next) => {

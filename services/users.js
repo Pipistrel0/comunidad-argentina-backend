@@ -1,4 +1,4 @@
-const User = require('../models/users');
+const {User, UserOauth} = require('../models/users');
 const bcrypt = require('bcryptjs');
 
 
@@ -15,14 +15,24 @@ class UserService{
     const user = await User.findOne({email: email});
     return user;
   }
-  async findOrCreateOne(googleId, email){
-    const user = await User.findOne({$or:[{email: email}, {googleId: googleId}]});
-    if(user){
-      return user;
+  async findOrCreateOne(data){
+    const userOauth = await User.findOne({$or:[{email: data.email}, {googleId: data.id}]});
+    if(userOauth){
+      return userOauth;
     }
-    await this.createOne(email)
-    return await this.getOneByEmail(email);
+    await this.createOneUserOauth(data)
+    return await this.getOneByEmail(data.email);
   }
+  async createOneUserOauth(data){    
+    const newUserOauth = new UserOauth({
+      googleId: data.id,
+      email: data.email,
+      firstName: data.given_name,
+      lastName: data.family_name
+    });
+    await newUserOauth.save();
+  }
+  
   async createOne(data){
     const passwordHashed = await bcrypt.hash(data.password, 10);
     const {
